@@ -1,0 +1,1086 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0d0f14">
+<title>ParkWacht</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0d0f14; --surface:#161920; --surface2:#1e2230; --border:#2a2f40;
+  --accent:#f5a623; --red:#e8394a; --green:#3af0a0;
+  --text:#e8eaf2; --muted:#6b7394;
+  --warned:#f5a623; --clamped:#e8394a; --clean:#3af0a0;
+  --mono:'Space Mono',monospace; --sans:'Syne',sans-serif;
+  --sidebar:240px;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{height:100%;overflow:hidden;}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex;flex-direction:column;}
+
+/* ── SETUP SCREEN ── */
+#setup-screen{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  height:100vh;padding:24px;gap:0;
+}
+.setup-card{
+  background:var(--surface);border:1px solid var(--border);border-radius:16px;
+  padding:36px;width:100%;max-width:480px;
+}
+.setup-logo{font-size:32px;font-weight:800;color:var(--accent);margin-bottom:4px;}
+.setup-sub{font-family:var(--mono);font-size:10px;color:var(--muted);letter-spacing:2px;text-transform:uppercase;margin-bottom:28px;}
+.setup-step{font-size:11px;font-family:var(--mono);color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:20px;padding-bottom:8px;border-bottom:1px solid var(--border);}
+.setup-info{background:var(--surface2);border-radius:8px;padding:14px 16px;font-size:12px;color:var(--muted);line-height:1.8;margin-bottom:20px;}
+.setup-info strong{color:var(--text);}
+.setup-info code{color:var(--accent);font-family:var(--mono);}
+.setup-info a{color:#4a9eff;}
+
+/* ── LAYOUT ── */
+#app{display:none;height:100vh;overflow:hidden;}
+.layout{display:flex;height:100%;}
+
+/* ── SIDEBAR ── */
+.sidebar{
+  width:var(--sidebar);flex-shrink:0;
+  background:var(--surface);border-right:1px solid var(--border);
+  display:flex;flex-direction:column;overflow-y:auto;
+}
+.logo{padding:22px 20px 16px;border-bottom:1px solid var(--border);}
+.logo-title{font-size:20px;font-weight:800;color:var(--accent);}
+.logo-sub{font-family:var(--mono);font-size:9px;color:var(--muted);letter-spacing:2px;text-transform:uppercase;margin-top:2px;}
+.nav{padding:12px 10px;flex:1;}
+.nav-section{font-family:var(--mono);font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);padding:12px 10px 5px;}
+.nav-item{display:flex;align-items:center;gap:9px;padding:9px 10px;border-radius:7px;cursor:pointer;font-size:13px;font-weight:600;color:var(--muted);transition:all .15s;margin-bottom:2px;user-select:none;}
+.nav-item:hover{background:var(--surface2);color:var(--text);}
+.nav-item.active{background:var(--surface2);color:var(--accent);}
+.nav-icon{font-size:15px;width:18px;text-align:center;}
+.sidebar-stats{padding:12px 14px;border-top:1px solid var(--border);}
+.stat-row{display:flex;justify-content:space-between;align-items:center;padding:4px 0;}
+.stat-label{font-size:10px;color:var(--muted);font-family:var(--mono);}
+.stat-val{font-size:12px;font-weight:700;font-family:var(--mono);}
+.stat-val.warn{color:var(--warned);} .stat-val.clamp{color:var(--clamped);}
+.user-strip{padding:10px 14px;border-top:1px solid var(--border);font-size:11px;font-family:var(--mono);color:var(--muted);display:flex;align-items:center;gap:6px;}
+.user-dot{width:7px;height:7px;border-radius:50%;background:var(--green);flex-shrink:0;}
+
+/* ── MAIN ── */
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden;}
+.topbar{
+  display:flex;align-items:center;gap:12px;
+  padding:14px 24px;border-bottom:1px solid var(--border);
+  background:rgba(13,15,20,.95);backdrop-filter:blur(10px);flex-shrink:0;
+}
+.topbar h1{font-size:18px;font-weight:800;flex:1;}
+.search-box{display:flex;align-items:center;background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:7px 12px;gap:7px;width:220px;}
+.search-box input{background:none;border:none;outline:none;color:var(--text);font-family:var(--mono);font-size:12px;width:100%;text-transform:uppercase;letter-spacing:1px;}
+.search-box input::placeholder{color:var(--muted);}
+
+/* ── BUTTONS ── */
+.btn{display:inline-flex;align-items:center;gap:5px;padding:8px 16px;border-radius:7px;border:none;cursor:pointer;font-family:var(--sans);font-size:12px;font-weight:700;transition:all .15s;white-space:nowrap;}
+.btn:disabled{opacity:.4;cursor:not-allowed;}
+.btn-primary{background:var(--accent);color:#000;}
+.btn-primary:hover:not(:disabled){background:#ffc04a;}
+.btn-danger{background:var(--red);color:#fff;}
+.btn-danger:hover:not(:disabled){background:#ff5566;}
+.btn-ghost{background:var(--surface2);color:var(--text);border:1px solid var(--border);}
+.btn-ghost:hover:not(:disabled){border-color:var(--accent);color:var(--accent);}
+.btn-success{background:#1a4a35;color:var(--green);border:1px solid #2a6a50;}
+.btn-success:hover:not(:disabled){background:#205a40;}
+
+/* ── PAGES ── */
+.content{flex:1;overflow-y:auto;padding:24px;}
+
+/* ── LOADING ── */
+.loading-overlay{
+  display:flex;align-items:center;justify-content:center;gap:10px;
+  padding:60px 24px;color:var(--muted);font-size:13px;font-family:var(--mono);
+}
+
+/* ── VEHICLE GRID ── */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:14px;}
+.vehicle-card{
+  background:var(--surface);border:1px solid var(--border);border-radius:11px;
+  padding:18px;cursor:pointer;transition:all .2s;position:relative;overflow:hidden;
+}
+.vehicle-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;}
+.vehicle-card.status-clean::before{background:var(--clean);}
+.vehicle-card.status-gewaarschuwd::before{background:var(--warned);}
+.vehicle-card.status-geklemd::before{background:var(--clamped);}
+.vehicle-card:hover{border-color:var(--accent);transform:translateY(-1px);box-shadow:0 6px 24px rgba(0,0,0,.4);}
+.plate{font-family:var(--mono);font-size:18px;font-weight:700;letter-spacing:3px;background:var(--surface2);border:2px solid var(--border);border-radius:5px;padding:5px 10px;display:inline-block;}
+.plate-large{font-family:var(--mono);font-size:28px;font-weight:700;letter-spacing:4px;background:var(--surface2);border:2px solid var(--border);padding:10px 20px;border-radius:7px;}
+.status-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:20px;font-size:10px;font-weight:700;font-family:var(--mono);text-transform:uppercase;letter-spacing:1px;}
+.badge-clean{background:#0d2e1e;color:var(--clean);}
+.badge-gewaarschuwd{background:#2e1e00;color:var(--warned);}
+.badge-geklemd{background:#2e0a0f;color:var(--clamped);}
+.card-meta{font-size:11px;color:var(--muted);font-family:var(--mono);display:flex;gap:12px;flex-wrap:wrap;margin-top:8px;}
+.enforcement-hint{font-size:10px;font-family:var(--mono);margin-top:6px;}
+.hint-ready{color:var(--clamped);}
+.hint-waiting{color:var(--warned);}
+.hint-needs-warning{color:var(--warned);}
+
+/* ── DETAIL ── */
+.detail-view{display:none;}
+.detail-view.active{display:block;}
+.list-view.hidden{display:none;}
+.back-btn{display:inline-flex;align-items:center;gap:5px;color:var(--muted);cursor:pointer;font-size:12px;font-weight:600;margin-bottom:20px;transition:color .15s;}
+.back-btn:hover{color:var(--accent);}
+.detail-header{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:20px;flex-wrap:wrap;}
+.detail-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-start;margin-top:8px;}
+
+/* ── ENFORCEMENT BANNERS ── */
+.ebanner{border-radius:9px;padding:12px 16px;margin-bottom:20px;display:flex;align-items:flex-start;gap:10px;font-size:12px;}
+.ebanner-blocked{background:#1a1200;border:1px solid #3a2800;border-left:4px solid var(--warned);color:var(--warned);}
+.ebanner-ready{background:#1a0810;border:1px solid #4a1020;border-left:4px solid var(--clamped);color:var(--clamped);}
+.ebanner-done{background:#0d1e14;border:1px solid #1a4a30;border-left:4px solid var(--green);color:var(--green);}
+.ebanner-icon{font-size:20px;flex-shrink:0;}
+.ebanner strong{display:block;margin-bottom:2px;}
+.ebanner-sub{color:var(--muted);font-size:11px;line-height:1.5;}
+
+/* ── TIMELINE ── */
+.section-title{font-size:10px;font-family:var(--mono);letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:14px;padding-bottom:7px;border-bottom:1px solid var(--border);}
+.timeline{position:relative;padding-left:22px;}
+.timeline::before{content:'';position:absolute;left:6px;top:0;bottom:0;width:2px;background:var(--border);}
+.tl-item{position:relative;margin-bottom:16px;background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:14px;}
+.tl-item::before{content:'';position:absolute;left:-18px;top:16px;width:9px;height:9px;border-radius:50%;background:var(--accent);border:2px solid var(--bg);}
+.tl-item.type-waarschuwing::before{background:var(--warned);}
+.tl-item.type-klem::before{background:var(--clamped);}
+.tl-header{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:6px;}
+.tl-type{font-size:11px;font-weight:700;font-family:var(--mono);text-transform:uppercase;letter-spacing:1px;}
+.type-incident .tl-type{color:var(--accent);}
+.type-waarschuwing .tl-type{color:var(--warned);}
+.type-klem .tl-type{color:var(--clamped);}
+.tl-date{font-family:var(--mono);font-size:10px;color:var(--muted);white-space:nowrap;}
+.tl-body{font-size:12px;color:var(--muted);line-height:1.5;margin-bottom:8px;}
+.tl-meta{font-size:10px;color:var(--muted);font-family:var(--mono);margin-top:3px;}
+
+/* ── MEDIA ── */
+.media-grid{display:flex;gap:7px;flex-wrap:wrap;margin-top:8px;}
+.media-thumb{width:72px;height:54px;background:var(--surface2);border:1px solid var(--border);border-radius:5px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer;font-size:8px;font-family:var(--mono);color:var(--muted);text-align:center;padding:5px;transition:all .15s;overflow:hidden;position:relative;}
+.media-thumb:hover{border-color:var(--accent);color:var(--accent);}
+.media-thumb .t-icon{font-size:18px;}
+.media-thumb img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:4px;}
+.media-thumb .t-overlay{position:absolute;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .15s;font-size:16px;border-radius:4px;}
+.media-thumb:hover .t-overlay{opacity:1;}
+
+/* ── UPLOAD STATUS ── */
+.upload-st{display:flex;align-items:center;gap:5px;font-size:10px;font-family:var(--mono);margin-top:7px;}
+.st-uploading{color:var(--accent);}
+.st-done{color:var(--green);}
+.st-error{color:var(--clamped);}
+
+/* ── MODAL ── */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.8);backdrop-filter:blur(5px);z-index:999;display:flex;align-items:center;justify-content:center;padding:16px;opacity:0;pointer-events:none;transition:opacity .2s;}
+.modal-overlay.open{opacity:1;pointer-events:all;}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:26px;width:100%;max-width:520px;max-height:92vh;overflow-y:auto;transform:scale(.95);transition:transform .2s;}
+.modal-overlay.open .modal{transform:scale(1);}
+.modal-title{font-size:16px;font-weight:800;margin-bottom:20px;display:flex;justify-content:space-between;align-items:center;}
+.modal-close{cursor:pointer;color:var(--muted);font-size:18px;transition:color .15s;line-height:1;}
+.modal-close:hover{color:var(--text);}
+.form-group{margin-bottom:15px;}
+.form-label{display:block;font-size:10px;font-family:var(--mono);letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:5px;}
+.form-input,.form-select,.form-textarea{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:9px 12px;color:var(--text);font-family:var(--sans);font-size:13px;outline:none;transition:border-color .15s;}
+.form-input:focus,.form-select:focus,.form-textarea:focus{border-color:var(--accent);}
+.plate-input{font-family:var(--mono);font-size:16px;letter-spacing:3px;text-transform:uppercase;}
+.form-select option{background:var(--surface2);}
+.form-textarea{resize:vertical;min-height:70px;}
+.upload-area{border:2px dashed var(--border);border-radius:7px;padding:18px;text-align:center;cursor:pointer;transition:all .15s;position:relative;}
+.upload-area:hover{border-color:var(--accent);}
+.upload-area input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;}
+.upload-area .u-icon{font-size:24px;margin-bottom:3px;}
+.upload-area p{font-size:11px;color:var(--muted);font-family:var(--mono);}
+.upload-area .u-name{color:var(--accent);font-size:11px;margin-top:5px;font-family:var(--mono);}
+.modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:20px;padding-top:16px;border-top:1px solid var(--border);}
+.info-box{background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:11px 14px;font-size:11px;color:var(--muted);line-height:1.7;margin-bottom:15px;}
+.info-box strong{color:var(--text);}
+.info-box code{color:var(--accent);font-family:var(--mono);font-size:10px;}
+.info-box a{color:#4a9eff;}
+
+/* ── EMPTY ── */
+.empty{text-align:center;padding:60px 24px;color:var(--muted);}
+.empty .e-icon{font-size:48px;margin-bottom:14px;}
+.empty h3{font-size:16px;font-weight:700;color:var(--text);margin-bottom:7px;}
+.empty p{font-size:12px;line-height:1.6;max-width:280px;margin:0 auto 16px;}
+
+/* ── NOTIF ── */
+.notif{position:fixed;bottom:20px;right:20px;background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--green);border-radius:9px;padding:12px 16px;font-size:12px;font-weight:600;z-index:9999;transform:translateX(130%);transition:transform .3s;max-width:300px;}
+.notif.show{transform:translateX(0);}
+.notif.error{border-left-color:var(--clamped);}
+.notif.warn{border-left-color:var(--warned);}
+
+/* ── VIDEO ── */
+.video-modal-inner{max-width:720px;}
+.video-player{width:100%;border-radius:7px;background:#000;max-height:380px;}
+
+/* ── SPINNER ── */
+@keyframes spin{to{transform:rotate(360deg);}}
+.spinner{display:inline-block;width:10px;height:10px;border:2px solid currentColor;border-top-color:transparent;border-radius:50%;animation:spin .7s linear infinite;}
+
+/* ── SCROLLBAR ── */
+::-webkit-scrollbar{width:5px;} ::-webkit-scrollbar-track{background:var(--bg);} ::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px;}
+
+/* ── MOBILE BOTTOM NAV ── */
+@media(max-width:680px){
+  .sidebar{display:none;}
+  .layout{flex-direction:column;}
+  .main{height:100%;}
+  .topbar{padding:10px 14px;gap:8px;}
+  .topbar h1{font-size:15px;}
+  .search-box{width:140px;}
+  .content{padding:14px;}
+  .mobile-nav{
+    display:flex;background:var(--surface);border-top:1px solid var(--border);
+    flex-shrink:0;
+  }
+  .mobile-nav-item{flex:1;display:flex;flex-direction:column;align-items:center;padding:8px 4px 10px;cursor:pointer;font-size:9px;color:var(--muted);font-family:var(--mono);gap:3px;transition:color .15s;user-select:none;}
+  .mobile-nav-item.active{color:var(--accent);}
+  .mobile-nav-item .mn-icon{font-size:18px;}
+  .grid{grid-template-columns:1fr;}
+  .plate-large{font-size:20px;padding:8px 14px;}
+  .detail-actions .btn{font-size:11px;padding:7px 10px;}
+}
+@media(min-width:681px){
+  .mobile-nav{display:none;}
+}
+</style>
+</head>
+<body>
+
+<!-- ══════════ SETUP SCREEN ══════════ -->
+<div id="setup-screen">
+  <div class="setup-card">
+    <div class="setup-logo">🅿 ParkWacht</div>
+    <div class="setup-sub">Configuratie vereist</div>
+
+    <div class="setup-step">Stap 1 — Supabase project aanmaken</div>
+    <div class="setup-info">
+      <strong>1.</strong> Ga naar <a href="https://supabase.com" target="_blank">supabase.com</a> → New project → kies regio <code>West EU (Ireland)</code><br>
+      <strong>2.</strong> Kopieer in <em>Project Settings → API</em> uw <code>Project URL</code> en <code>anon public</code> key<br>
+      <strong>3.</strong> Voer de SQL hieronder uit in de <em>SQL Editor</em> om de tabellen aan te maken
+    </div>
+
+    <div class="setup-step" style="margin-top:16px">Stap 2 — SQL uitvoeren in Supabase</div>
+    <div style="background:#0a0c12;border:1px solid var(--border);border-radius:7px;padding:14px;font-family:var(--mono);font-size:10px;color:#7af0b0;line-height:1.7;margin-bottom:18px;overflow-x:auto;white-space:pre;">create table vehicles (
+  id uuid primary key default gen_random_uuid(),
+  plate text unique not null,
+  brand text, notes text,
+  created_at timestamptz default now()
+);
+create table events (
+  id uuid primary key default gen_random_uuid(),
+  vehicle_id uuid references vehicles(id) on delete cascade,
+  type text not null,
+  subtype text, date timestamptz not null,
+  location text, operator text,
+  notes text, released timestamptz,
+  video_url text, video_name text,
+  photo_urls text[],
+  created_at timestamptz default now()
+);
+create table config (
+  key text primary key, value text
+);
+-- Stel Row Level Security in op "open" voor dit privé-gebruik:
+alter table vehicles enable row level security;
+alter table events enable row level security;
+alter table config enable row level security;
+create policy "open" on vehicles for all using (true) with check (true);
+create policy "open" on events for all using (true) with check (true);
+create policy "open" on config for all using (true) with check (true);
+-- Maak storage bucket aan voor media:
+insert into storage.buckets (id,name,public) values ('media','media',true)
+  on conflict do nothing;
+create policy "open media" on storage.objects for all using (bucket_id='media') with check (bucket_id='media');</div>
+
+    <div class="setup-step">Stap 3 — Uw gegevens invullen</div>
+    <div class="form-group">
+      <label class="form-label">Supabase Project URL</label>
+      <input type="text" class="form-input" id="setup-url" placeholder="https://xxxxxxxxxxxx.supabase.co" />
+    </div>
+    <div class="form-group">
+      <label class="form-label">Supabase Anon Key (publiek)</label>
+      <input type="text" class="form-input" id="setup-key" placeholder="eyJhbGci..." style="font-size:11px;font-family:var(--mono);" />
+    </div>
+    <div class="form-group">
+      <label class="form-label">Uw naam (medewerker-ID)</label>
+      <input type="text" class="form-input" id="setup-name" placeholder="bijv. Jan of Sofie" />
+    </div>
+    <button class="btn btn-primary" onclick="setupConnect()" style="width:100%;justify-content:center;font-size:14px;padding:12px;">
+      Verbinden & starten →
+    </button>
+    <div id="setup-error" style="margin-top:12px;font-size:11px;font-family:var(--mono);color:var(--clamped);"></div>
+  </div>
+</div>
+
+<!-- ══════════ MAIN APP ══════════ -->
+<div id="app">
+  <div class="layout">
+
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+      <div class="logo">
+        <div class="logo-title">🅿 ParkWacht</div>
+        <div class="logo-sub">Parkeerhandhaving v3</div>
+      </div>
+      <nav class="nav">
+        <div class="nav-section">Overzicht</div>
+        <div class="nav-item active" onclick="showPage('voertuigen',this)"><span class="nav-icon">🚗</span>Voertuigen</div>
+        <div class="nav-item" onclick="showPage('incidenten',this)"><span class="nav-icon">⚠️</span>Incidenten</div>
+        <div class="nav-section">Acties</div>
+        <div class="nav-item" onclick="showPage('waarschuwingen',this)"><span class="nav-icon">🏷️</span>Waarschuwingen</div>
+        <div class="nav-item" onclick="showPage('wielklemmen',this)"><span class="nav-icon">🔒</span>Wielklemmen</div>
+        <div class="nav-section">Systeem</div>
+        <div class="nav-item" onclick="showPage('instellingen',this)"><span class="nav-icon">⚙️</span>Instellingen</div>
+      </nav>
+      <div class="sidebar-stats">
+        <div class="stat-row"><span class="stat-label">Voertuigen</span><span class="stat-val" id="stat-total">—</span></div>
+        <div class="stat-row"><span class="stat-label">Gewaarschuwd</span><span class="stat-val warn" id="stat-warned">—</span></div>
+        <div class="stat-row"><span class="stat-label">Geklemd</span><span class="stat-val clamp" id="stat-clamped">—</span></div>
+      </div>
+      <div class="user-strip"><div class="user-dot"></div><span id="sidebar-user">—</span></div>
+    </aside>
+
+    <!-- MAIN -->
+    <div class="main">
+      <div class="topbar">
+        <h1 id="page-title">Voertuigen</h1>
+        <div class="search-box"><span>🔍</span><input type="text" id="search-input" placeholder="Kenteken..." oninput="filterVehicles()"/></div>
+        <button class="btn btn-primary" id="topbar-btn" onclick="openAddVehicleModal()">+ Voertuig</button>
+      </div>
+
+      <div class="content" id="main-content">
+
+        <!-- VOERTUIGEN -->
+        <div id="page-voertuigen">
+          <div id="vehicle-list-view"><div class="grid" id="vehicle-grid"></div></div>
+          <div class="detail-view" id="vehicle-detail-view">
+            <div class="back-btn" onclick="showList()">← Terug</div>
+            <div class="detail-header">
+              <div>
+                <div class="plate-large" id="detail-plate"></div>
+                <div style="margin-top:9px;display:flex;gap:7px;align-items:center;flex-wrap:wrap;">
+                  <span class="status-badge" id="detail-status-badge"></span>
+                  <span style="font-size:10px;color:var(--muted);font-family:var(--mono);" id="detail-first-seen"></span>
+                </div>
+              </div>
+              <div class="detail-actions">
+                <button class="btn btn-ghost" onclick="openAddIncidentModal()">⚠️ Incident</button>
+                <button class="btn btn-ghost" style="color:var(--warned);border-color:rgba(245,166,35,.3)" onclick="openAddWaarschuwingModal()">🏷️ Waarschuwing</button>
+                <button class="btn btn-danger" id="btn-klem" onclick="openAddKlemModal()">🔒 Wielklem</button>
+              </div>
+            </div>
+            <div id="enforcement-banner"></div>
+            <div><div class="section-title">Tijdlijn</div><div class="timeline" id="detail-timeline"></div></div>
+          </div>
+        </div>
+
+        <!-- INCIDENTEN -->
+        <div id="page-incidenten" style="display:none">
+          <div style="margin-bottom:16px;display:flex;justify-content:flex-end;">
+            <button class="btn btn-primary" onclick="openAddIncidentModal(true)">+ Incident</button>
+          </div>
+          <div id="all-incidents-list"></div>
+        </div>
+
+        <!-- WAARSCHUWINGEN -->
+        <div id="page-waarschuwingen" style="display:none"><div id="all-waarschuwingen-list"></div></div>
+
+        <!-- WIELKLEMMEN -->
+        <div id="page-wielklemmen" style="display:none"><div id="all-wielklemmen-list"></div></div>
+
+        <!-- INSTELLINGEN -->
+        <div id="page-instellingen" style="display:none">
+          <div style="max-width:520px">
+            <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;margin-bottom:16px;">
+              <div class="section-title" style="margin-bottom:14px;">Verbinding</div>
+              <div class="info-box" id="settings-info"></div>
+              <button class="btn btn-ghost" onclick="resetConnection()" style="width:100%;justify-content:center;">🔌 Andere database verbinden</button>
+            </div>
+            <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;">
+              <div class="section-title" style="margin-bottom:14px;">Medewerker</div>
+              <div class="form-group">
+                <label class="form-label">Uw naam</label>
+                <input type="text" class="form-input" id="settings-name" placeholder="Naam medewerker" />
+              </div>
+              <button class="btn btn-primary" onclick="saveName()" style="width:100%;justify-content:center;">Opslaan</button>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- end content -->
+
+      <!-- MOBILE BOTTOM NAV -->
+      <nav class="mobile-nav">
+        <div class="mobile-nav-item active" onclick="showPage('voertuigen',this)"><span class="mn-icon">🚗</span>Voertuigen</div>
+        <div class="mobile-nav-item" onclick="showPage('incidenten',this)"><span class="mn-icon">⚠️</span>Incidenten</div>
+        <div class="mobile-nav-item" onclick="showPage('waarschuwingen',this)"><span class="mn-icon">🏷️</span>Stickers</div>
+        <div class="mobile-nav-item" onclick="showPage('wielklemmen',this)"><span class="mn-icon">🔒</span>Klemmen</div>
+        <div class="mobile-nav-item" onclick="showPage('instellingen',this)"><span class="mn-icon">⚙️</span>Instellingen</div>
+      </nav>
+    </div><!-- end .main -->
+  </div><!-- end .layout -->
+</div><!-- end #app -->
+
+<!-- ══════════ MODALS ══════════ -->
+
+<!-- Voertuig -->
+<div class="modal-overlay" id="modal-vehicle">
+  <div class="modal">
+    <div class="modal-title">Voertuig registreren<span class="modal-close" onclick="closeModal('modal-vehicle')">✕</span></div>
+    <div class="form-group"><label class="form-label">Kenteken</label><input type="text" class="form-input plate-input" id="v-plate" placeholder="1-ABC-234"/></div>
+    <div class="form-group"><label class="form-label">Merk / Model</label><input type="text" class="form-input" id="v-brand" placeholder="bijv. VW Golf, zwart"/></div>
+    <div class="form-group"><label class="form-label">Notities</label><textarea class="form-textarea" id="v-notes"></textarea></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('modal-vehicle')">Annuleren</button>
+      <button class="btn btn-primary" onclick="saveVehicle()">Registreren</button>
+    </div>
+  </div>
+</div>
+
+<!-- Incident -->
+<div class="modal-overlay" id="modal-incident">
+  <div class="modal">
+    <div class="modal-title">Incident registreren<span class="modal-close" onclick="closeModal('modal-incident')">✕</span></div>
+    <div class="form-group" id="incident-plate-group" style="display:none">
+      <label class="form-label">Kenteken</label>
+      <input type="text" class="form-input plate-input" id="i-plate" placeholder="1-ABC-234"/>
+    </div>
+    <div class="form-group"><label class="form-label">Type overtreding</label>
+      <select class="form-select" id="i-type">
+        <option>Onbetaald parkeren</option><option>Overschrijding parkeertijd</option>
+        <option>Parkeren op privéterrein</option><option>Parkeren in verboden zone</option><option>Andere overtreding</option>
+      </select>
+    </div>
+    <div class="form-group"><label class="form-label">Datum & tijdstip</label><input type="datetime-local" class="form-input" id="i-date"/></div>
+    <div class="form-group"><label class="form-label">Locatie / Zone</label><input type="text" class="form-input" id="i-location" placeholder="bijv. Zone A"/></div>
+    <div class="form-group">
+      <label class="form-label">Bewijsvideo</label>
+      <div class="upload-area" onclick="document.getElementById('i-video').click()">
+        <input type="file" id="i-video" accept="video/*" onchange="setFn('i-video','i-video-name')"/>
+        <div class="u-icon">🎥</div><p>Selecteer videobestand</p><div class="u-name" id="i-video-name"></div>
+      </div>
+    </div>
+    <div class="form-group"><label class="form-label">Notities</label><textarea class="form-textarea" id="i-notes"></textarea></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('modal-incident')">Annuleren</button>
+      <button class="btn btn-primary" id="btn-save-incident" onclick="saveIncident()">Opslaan</button>
+    </div>
+  </div>
+</div>
+
+<!-- Waarschuwing -->
+<div class="modal-overlay" id="modal-waarschuwing">
+  <div class="modal">
+    <div class="modal-title">Waarschuwing registreren<span class="modal-close" onclick="closeModal('modal-waarschuwing')">✕</span></div>
+    <div class="info-box">🏷️ <strong>Stap 1 van het handhavingstraject.</strong> Na deze waarschuwing is een wielklem pas toegestaan bij een volgend incident.</div>
+    <div class="form-group"><label class="form-label">Datum & tijdstip</label><input type="datetime-local" class="form-input" id="w-date"/></div>
+    <div class="form-group"><label class="form-label">Operator</label><input type="text" class="form-input" id="w-operator" placeholder="Naam medewerker"/></div>
+    <div class="form-group">
+      <label class="form-label">📸 Foto — sticker op voertuig</label>
+      <div class="upload-area" onclick="document.getElementById('w-photo').click()">
+        <input type="file" id="w-photo" accept="image/*" capture="environment" onchange="setFn('w-photo','w-photo-name');prevImg('w-photo','w-preview')"/>
+        <div class="u-icon">📷</div><p>Foto nemen of selecteren</p><div class="u-name" id="w-photo-name"></div>
+      </div>
+      <img id="w-preview" style="display:none;width:100%;border-radius:7px;margin-top:7px;max-height:180px;object-fit:cover;"/>
+    </div>
+    <div class="form-group"><label class="form-label">Notities</label><textarea class="form-textarea" id="w-notes"></textarea></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('modal-waarschuwing')">Annuleren</button>
+      <button class="btn btn-success" id="btn-save-waarschuwing" onclick="saveWaarschuwing()">🏷️ Opslaan</button>
+    </div>
+  </div>
+</div>
+
+<!-- Wielklem -->
+<div class="modal-overlay" id="modal-klem">
+  <div class="modal">
+    <div class="modal-title">Wielklem registreren<span class="modal-close" onclick="closeModal('modal-klem')">✕</span></div>
+    <div class="info-box" id="klem-modal-info"></div>
+    <div class="form-group"><label class="form-label">Datum & tijdstip</label><input type="datetime-local" class="form-input" id="k-date"/></div>
+    <div class="form-group"><label class="form-label">Operator</label><input type="text" class="form-input" id="k-operator" placeholder="Naam medewerker"/></div>
+    <div class="form-group">
+      <label class="form-label">📸 Foto 1 — Overzicht</label>
+      <div class="upload-area" onclick="document.getElementById('k-p1').click()">
+        <input type="file" id="k-p1" accept="image/*" capture="environment" onchange="setFn('k-p1','k-p1-name');prevImg('k-p1','k-prev1')"/>
+        <div class="u-icon">📷</div><p>Foto nemen of selecteren</p><div class="u-name" id="k-p1-name"></div>
+      </div>
+      <img id="k-prev1" style="display:none;width:100%;border-radius:7px;margin-top:7px;max-height:150px;object-fit:cover;"/>
+    </div>
+    <div class="form-group">
+      <label class="form-label">📸 Foto 2 — Detail wielklem</label>
+      <div class="upload-area" onclick="document.getElementById('k-p2').click()">
+        <input type="file" id="k-p2" accept="image/*" capture="environment" onchange="setFn('k-p2','k-p2-name');prevImg('k-p2','k-prev2')"/>
+        <div class="u-icon">🔒</div><p>Foto nemen of selecteren</p><div class="u-name" id="k-p2-name"></div>
+      </div>
+      <img id="k-prev2" style="display:none;width:100%;border-radius:7px;margin-top:7px;max-height:150px;object-fit:cover;"/>
+    </div>
+    <div class="form-group"><label class="form-label">Vrijgegeven datum (optioneel)</label><input type="datetime-local" class="form-input" id="k-released"/></div>
+    <div class="form-group"><label class="form-label">Notities</label><textarea class="form-textarea" id="k-notes"></textarea></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('modal-klem')">Annuleren</button>
+      <button class="btn btn-danger" id="btn-save-klem" onclick="saveKlem()">🔒 Opslaan</button>
+    </div>
+  </div>
+</div>
+
+<!-- Video -->
+<div class="modal-overlay" id="modal-video">
+  <div class="modal video-modal-inner">
+    <div class="modal-title">Bewijsvideo<span class="modal-close" onclick="closeVideoModal()">✕</span></div>
+    <video class="video-player" id="video-player" controls></video>
+    <div style="margin-top:10px;font-size:10px;color:var(--muted);font-family:var(--mono);" id="video-filename"></div>
+  </div>
+</div>
+
+<div class="notif" id="notif"></div>
+
+<script>
+// ═══════════════════════════════════════════════════
+//  GLOBALS
+// ═══════════════════════════════════════════════════
+let sb = null;          // Supabase client
+let currentUser = '';   // active user name
+let currentVehicleId = null;
+let fromPage = false;
+
+// In-memory cache
+let vehicleCache = [];  // [{id, plate, brand, notes, created_at}]
+let eventCache   = [];  // [{id, vehicle_id, type, subtype, date, ...}]
+
+// ═══════════════════════════════════════════════════
+//  SETUP & CONNECTION
+// ═══════════════════════════════════════════════════
+function savedCreds() {
+  try { return JSON.parse(localStorage.getItem('pw_creds')||'null'); } catch { return null; }
+}
+
+async function setupConnect() {
+  const url  = document.getElementById('setup-url').value.trim().replace(/\/+$/,'');
+  const key  = document.getElementById('setup-key').value.trim();
+  const name = document.getElementById('setup-name').value.trim();
+  const errEl = document.getElementById('setup-error');
+  if (!url||!key) { errEl.textContent='Vul URL en key in.'; return; }
+  if (!name)       { errEl.textContent='Vul uw naam in.'; return; }
+  errEl.textContent='Verbinding testen...';
+  try {
+    const client = supabase.createClient(url, key);
+    const { error } = await client.from('vehicles').select('id').limit(1);
+    if (error) throw error;
+    localStorage.setItem('pw_creds', JSON.stringify({url, key}));
+    localStorage.setItem('pw_user', name);
+    startApp(client, name);
+  } catch(e) {
+    errEl.textContent='Fout: '+e.message+'. Controleer URL, key en of de SQL correct is uitgevoerd.';
+  }
+}
+
+function resetConnection() {
+  localStorage.removeItem('pw_creds');
+  location.reload();
+}
+
+function saveName() {
+  const n = document.getElementById('settings-name').value.trim();
+  if (!n) return;
+  localStorage.setItem('pw_user', n);
+  currentUser = n;
+  document.getElementById('sidebar-user').textContent = n;
+  showNotif('Naam opgeslagen ✓');
+}
+
+async function startApp(client, name) {
+  sb = client;
+  currentUser = name;
+  document.getElementById('setup-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  document.getElementById('sidebar-user').textContent = name;
+  document.getElementById('settings-name').value = name;
+
+  const creds = savedCreds();
+  document.getElementById('settings-info').innerHTML =
+    `<strong>Verbonden met:</strong><br><code>${creds?.url||'—'}</code><br><br>Alle gebruikers die dezelfde URL en key hebben, zien dezelfde data in realtime.`;
+
+  await loadAll();
+  renderVehicles();
+  updateStats();
+  showPage('voertuigen', document.querySelector('.nav-item'));
+}
+
+// ═══════════════════════════════════════════════════
+//  DATA LOADING
+// ═══════════════════════════════════════════════════
+async function loadAll() {
+  const [{ data: v }, { data: e }] = await Promise.all([
+    sb.from('vehicles').select('*').order('created_at'),
+    sb.from('events').select('*').order('date')
+  ]);
+  vehicleCache = v || [];
+  eventCache   = e || [];
+}
+
+async function reloadVehicle(vehicleId) {
+  const { data } = await sb.from('vehicles').select('*').eq('id', vehicleId).single();
+  if (data) {
+    const idx = vehicleCache.findIndex(v=>v.id===vehicleId);
+    if (idx>=0) vehicleCache[idx]=data; else vehicleCache.push(data);
+  }
+}
+
+async function reloadEvents(vehicleId) {
+  const { data } = await sb.from('events').select('*').eq('vehicle_id', vehicleId).order('date');
+  eventCache = eventCache.filter(e=>e.vehicle_id!==vehicleId).concat(data||[]);
+}
+
+// ═══════════════════════════════════════════════════
+//  ENFORCEMENT LOGIC
+// ═══════════════════════════════════════════════════
+function enforcementState(vehicleId) {
+  const ev      = eventCache.filter(e=>e.vehicle_id===vehicleId).sort((a,b)=>+new Date(a.date)-+new Date(b.date));
+  const hasKlem  = ev.some(e=>e.type==='klem');
+  const warnings = ev.filter(e=>e.type==='waarschuwing');
+  const allInc   = ev.filter(e=>e.type==='incident');
+  const firstW   = warnings[0]||null;
+  const incAfterW= firstW ? allInc.filter(i=>new Date(i.date)>new Date(firstW.date)) : [];
+  return {
+    hasKlem,
+    hasWarning:      warnings.length>0,
+    firstWarning:    firstW,
+    incidentCount:   allInc.length,
+    incAfterWarning: incAfterW.length,
+    canClamp:        warnings.length>0 && incAfterW.length>0 && !hasKlem,
+    needsWarning:    allInc.length>0 && warnings.length===0 && !hasKlem,
+    awaitingIncident:warnings.length>0 && incAfterW.length===0 && !hasKlem,
+  };
+}
+
+function vehicleStatus(vehicleId) {
+  const s=enforcementState(vehicleId);
+  if(s.hasKlem) return 'geklemd';
+  if(s.hasWarning) return 'gewaarschuwd';
+  return 'clean';
+}
+
+// ═══════════════════════════════════════════════════
+//  NAVIGATION
+// ═══════════════════════════════════════════════════
+function showPage(page, el) {
+  // Update sidebar
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  // Update mobile nav
+  document.querySelectorAll('.mobile-nav-item').forEach(n=>n.classList.remove('active'));
+  if (el) {
+    el.closest('.nav-item')?.classList.add('active');
+    el.closest('.mobile-nav-item')?.classList.add('active');
+  }
+
+  ['voertuigen','incidenten','waarschuwingen','wielklemmen','instellingen'].forEach(p=>
+    document.getElementById('page-'+p).style.display=p===page?'':'none');
+
+  const titles={voertuigen:'Voertuigen',incidenten:'Incidenten',waarschuwingen:'Waarschuwingen',wielklemmen:'Wielklemmen',instellingen:'Instellingen'};
+  document.getElementById('page-title').textContent=titles[page];
+
+  const btn=document.getElementById('topbar-btn');
+  const searchBox=document.querySelector('.search-box');
+  if (page==='voertuigen') { btn.textContent='+ Voertuig'; btn.onclick=openAddVehicleModal; btn.style.display=''; searchBox.style.display=''; }
+  else if (page==='incidenten') { btn.textContent='+ Incident'; btn.onclick=()=>openAddIncidentModal(true); btn.style.display=''; searchBox.style.display='none'; }
+  else { btn.style.display='none'; searchBox.style.display='none'; }
+
+  if (page==='voertuigen')    { showList(); }
+  if (page==='incidenten')    renderAllIncidents();
+  if (page==='waarschuwingen') renderAllWaarschuwingen();
+  if (page==='wielklemmen')   renderAllWielklemmen();
+  if (page==='instellingen')  loadSettingsPage();
+}
+
+function showList() {
+  document.getElementById('vehicle-list-view').classList.remove('hidden');
+  document.getElementById('vehicle-detail-view').classList.remove('active');
+  currentVehicleId=null;
+  renderVehicles();
+}
+
+function showDetail(vehicleId) {
+  currentVehicleId=vehicleId;
+  const v=vehicleCache.find(x=>x.id===vehicleId); if(!v) return;
+  document.getElementById('vehicle-list-view').classList.add('hidden');
+  document.getElementById('vehicle-detail-view').classList.add('active');
+  document.getElementById('detail-plate').textContent=v.plate;
+  document.getElementById('detail-first-seen').textContent='Eerste melding: '+fmt(v.created_at);
+  refreshDetailHeader(vehicleId);
+  renderTimeline(vehicleId);
+}
+
+function refreshDetailHeader(vehicleId) {
+  const status=vehicleStatus(vehicleId);
+  const state=enforcementState(vehicleId);
+  const badge=document.getElementById('detail-status-badge');
+  badge.textContent=status; badge.className='status-badge badge-'+status;
+  const btnKlem=document.getElementById('btn-klem');
+  const banner=document.getElementById('enforcement-banner');
+  btnKlem.disabled=!state.canClamp;
+
+  if (state.hasKlem) {
+    btnKlem.disabled=true;
+    banner.innerHTML=`<div class="ebanner ebanner-done"><div class="ebanner-icon">✅</div><div><strong>Voertuig is momenteel geklemd</strong><div class="ebanner-sub">Wielklem geregistreerd in het dossier.</div></div></div>`;
+  } else if (state.canClamp) {
+    banner.innerHTML=`<div class="ebanner ebanner-ready"><div class="ebanner-icon">🔒</div><div><strong>Handhavingsprocedure actief — plaatsing toegestaan</strong><div class="ebanner-sub">Waarschuwing op ${fmt(state.firstWarning.date)} — daarna ${state.incAfterWarning} incident(en).</div></div></div>`;
+  } else if (state.awaitingIncident) {
+    banner.innerHTML=`<div class="ebanner ebanner-blocked"><div class="ebanner-icon">⏳</div><div><strong>Wachten op incident na waarschuwing</strong><div class="ebanner-sub">Waarschuwing op ${fmt(state.firstWarning.date)}. Registreer eerst een nieuw incident vóór de wielklem.</div></div></div>`;
+  } else if (state.needsWarning) {
+    banner.innerHTML=`<div class="ebanner ebanner-blocked"><div class="ebanner-icon">🏷️</div><div><strong>Waarschuwingssticker vereist</strong><div class="ebanner-sub">Breng eerst een sticker aan en registreer die. Daarna is een nieuw incident vereist.</div></div></div>`;
+  } else {
+    banner.innerHTML='';
+  }
+}
+
+// ═══════════════════════════════════════════════════
+//  RENDER
+// ═══════════════════════════════════════════════════
+const fmt = iso => {
+  if(!iso) return '';
+  const d=new Date(iso);
+  return d.toLocaleDateString('nl-BE')+' '+d.toTimeString().slice(0,5);
+};
+
+function renderVehicles(filter='') {
+  const grid=document.getElementById('vehicle-grid');
+  const list=filter ? vehicleCache.filter(v=>v.plate.toUpperCase().includes(filter.toUpperCase())) : vehicleCache;
+  if (!list.length) {
+    grid.innerHTML=`<div class="empty" style="grid-column:1/-1"><div class="e-icon">🚗</div><h3>Geen voertuigen</h3><p>Registreer het eerste voertuig.</p><button class="btn btn-primary" onclick="openAddVehicleModal()">+ Voertuig toevoegen</button></div>`;
+    return;
+  }
+  grid.innerHTML=list.map(v=>{
+    const status=vehicleStatus(v.id);
+    const state=enforcementState(v.id);
+    const ev=eventCache.filter(e=>e.vehicle_id===v.id);
+    const inc=ev.filter(e=>e.type==='incident').length;
+    const war=ev.filter(e=>e.type==='waarschuwing').length;
+    const kle=ev.filter(e=>e.type==='klem').length;
+    let hint='';
+    if (state.canClamp) hint=`<div class="enforcement-hint hint-ready">🔒 Klaar voor wielklem</div>`;
+    else if (state.awaitingIncident) hint=`<div class="enforcement-hint hint-waiting">⏳ Wacht op incident na waarschuwing</div>`;
+    else if (state.needsWarning) hint=`<div class="enforcement-hint hint-needs-warning">🏷️ Waarschuwing vereist</div>`;
+    return `<div class="vehicle-card status-${status}" onclick="showDetail('${v.id}')">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:9px;">
+        <div class="plate">${v.plate}</div><span class="status-badge badge-${status}">${status}</span>
+      </div>
+      ${v.brand?`<div style="font-size:12px;color:var(--muted);margin-bottom:5px;">${v.brand}</div>`:''}
+      <div class="card-meta"><span>⚠️ ${inc}</span><span>🏷️ ${war}</span><span>🔒 ${kle}</span></div>
+      ${hint}
+      <div class="card-meta" style="margin-top:5px;"><span>📅 ${fmt(v.created_at)}</span></div>
+    </div>`;
+  }).join('');
+}
+
+function filterVehicles() { renderVehicles(document.getElementById('search-input').value); }
+
+function updateStats() {
+  document.getElementById('stat-total').textContent=vehicleCache.length;
+  document.getElementById('stat-warned').textContent=vehicleCache.filter(v=>vehicleStatus(v.id)==='gewaarschuwd').length;
+  document.getElementById('stat-clamped').textContent=vehicleCache.filter(v=>vehicleStatus(v.id)==='geklemd').length;
+}
+
+function mediaHtml(ev) {
+  let h='';
+  if (ev.video_url) {
+    h+=`<div class="media-thumb" onclick="event.stopPropagation();playVideo('${ev.video_url}','${ev.video_name||'Video'}')">
+      <span class="t-icon">🎥</span><span>${(ev.video_name||'video').slice(0,10)}</span></div>`;
+  }
+  (ev.photo_urls||[]).forEach(url=>{
+    if(!url) return;
+    h+=`<div class="media-thumb" onclick="event.stopPropagation();window.open('${url}','_blank')">
+      <img src="${url}" alt="foto"><div class="t-overlay">🔍</div></div>`;
+  });
+  return h;
+}
+
+function tlItemHtml(ev) {
+  const labels={incident:`⚠️ ${ev.subtype||'Incident'}`,waarschuwing:'🏷️ Waarschuwingssticker',klem:'🔒 Wielklem aangebracht'};
+  const m=mediaHtml(ev);
+  return `<div class="tl-item type-${ev.type}">
+    <div class="tl-header">
+      <div>
+        <span class="tl-type">${labels[ev.type]}</span>
+        ${ev.location?`<div class="tl-meta">📍 ${ev.location}</div>`:''}
+        ${ev.operator?`<div class="tl-meta">👤 ${ev.operator}</div>`:''}
+        ${ev.type==='klem'&&ev.released?`<div class="tl-meta" style="color:var(--green)">✅ Vrijgegeven: ${fmt(ev.released)}</div>`:''}
+      </div>
+      <div class="tl-date">${fmt(ev.date)}</div>
+    </div>
+    ${ev.notes?`<div class="tl-body">${ev.notes}</div>`:''}
+    ${m?`<div class="media-grid">${m}</div>`:''}
+  </div>`;
+}
+
+function renderTimeline(vehicleId) {
+  const tl=document.getElementById('detail-timeline');
+  const ev=eventCache.filter(e=>e.vehicle_id===vehicleId).sort((a,b)=>+new Date(b.date)-+new Date(a.date));
+  tl.innerHTML=ev.length?ev.map(tlItemHtml).join(''):`<div style="color:var(--muted);font-size:12px;padding:16px 0">Nog geen gebeurtenissen.</div>`;
+}
+
+function plateBadge(vehicleId) {
+  const v=vehicleCache.find(x=>x.id===vehicleId);
+  return v?`<div class="plate" style="font-size:13px;padding:3px 9px;margin-bottom:7px;cursor:pointer" onclick="showDetail('${vehicleId}')">${v.plate}</div>`:'';
+}
+
+function renderGenericList(containerId,filterFn,emptyIcon,emptyTitle,emptyText,renderFn){
+  const c=document.getElementById(containerId);
+  const items=eventCache.filter(filterFn).sort((a,b)=>+new Date(b.date)-+new Date(a.date));
+  c.innerHTML=items.length?items.map(renderFn).join(''):`<div class="empty"><div class="e-icon">${emptyIcon}</div><h3>${emptyTitle}</h3><p>${emptyText}</p></div>`;
+}
+
+function renderAllIncidents(){
+  renderGenericList('all-incidents-list',e=>e.type==='incident','⚠️','Geen incidenten','Registreer via het voertuigprofiel.',e=>{
+    const m=mediaHtml(e);
+    return `<div class="tl-item type-incident" style="margin-bottom:12px;">
+      <div class="tl-header"><div>${plateBadge(e.vehicle_id)}<span class="tl-type">⚠️ ${e.subtype}</span>${e.location?`<div class="tl-meta">📍 ${e.location}</div>`:''}</div><div class="tl-date">${fmt(e.date)}</div></div>
+      ${e.notes?`<div class="tl-body">${e.notes}</div>`:''}${m?`<div class="media-grid">${m}</div>`:''}
+    </div>`;
+  });
+}
+function renderAllWaarschuwingen(){
+  renderGenericList('all-waarschuwingen-list',e=>e.type==='waarschuwing','🏷️','Geen waarschuwingen','Registreer via het voertuigprofiel.',e=>{
+    const m=mediaHtml(e);
+    return `<div class="tl-item type-waarschuwing" style="margin-bottom:12px;">
+      <div class="tl-header"><div>${plateBadge(e.vehicle_id)}<span class="tl-type">🏷️ Waarschuwingssticker</span>${e.operator?`<div class="tl-meta">👤 ${e.operator}</div>`:''}</div><div class="tl-date">${fmt(e.date)}</div></div>
+      ${e.notes?`<div class="tl-body">${e.notes}</div>`:''}${m?`<div class="media-grid">${m}</div>`:''}
+    </div>`;
+  });
+}
+function renderAllWielklemmen(){
+  renderGenericList('all-wielklemmen-list',e=>e.type==='klem','🔒','Geen wielklemmen','Registreer via het voertuigprofiel.',e=>{
+    const m=mediaHtml(e);
+    return `<div class="tl-item type-klem" style="margin-bottom:12px;">
+      <div class="tl-header"><div>${plateBadge(e.vehicle_id)}<span class="tl-type">🔒 Wielklem</span>${e.operator?`<div class="tl-meta">👤 ${e.operator}</div>`:''}${e.released?`<div class="tl-meta" style="color:var(--green)">✅ Vrijgegeven: ${fmt(e.released)}</div>`:''}</div><div class="tl-date">${fmt(e.date)}</div></div>
+      ${e.notes?`<div class="tl-body">${e.notes}</div>`:''}${m?`<div class="media-grid">${m}</div>`:''}
+    </div>`;
+  });
+}
+
+function loadSettingsPage(){
+  document.getElementById('settings-name').value=currentUser;
+}
+
+// ═══════════════════════════════════════════════════
+//  SUPABASE STORAGE UPLOAD
+// ═══════════════════════════════════════════════════
+async function uploadFile(file, prefix) {
+  const ext=file.name.split('.').pop().toLowerCase();
+  const ts=new Date().toISOString().replace(/[:.]/g,'-').slice(0,19);
+  const path=`${prefix}_${ts}.${ext}`;
+  const { data, error } = await sb.storage.from('media').upload(path, file, {cacheControl:'3600',upsert:false});
+  if (error) { console.warn('Upload fout:',error); return null; }
+  const { data: pub } = sb.storage.from('media').getPublicUrl(path);
+  return pub.publicUrl;
+}
+
+// ═══════════════════════════════════════════════════
+//  MODAL HELPERS
+// ═══════════════════════════════════════════════════
+const openModal  = id=>document.getElementById(id).classList.add('open');
+const closeModal = id=>document.getElementById(id).classList.remove('open');
+
+const nowLocal=()=>{ const d=new Date(); d.setMinutes(d.getMinutes()-d.getTimezoneOffset()); return d.toISOString().slice(0,16); };
+
+function openAddVehicleModal(){
+  ['v-plate','v-brand','v-notes'].forEach(id=>document.getElementById(id).value='');
+  openModal('modal-vehicle');
+}
+function openAddIncidentModal(isFromPage=false){
+  fromPage=!!isFromPage;
+  document.getElementById('incident-plate-group').style.display=(fromPage||!currentVehicleId)?'':'none';
+  document.getElementById('i-plate').value='';
+  document.getElementById('i-date').value=nowLocal();
+  ['i-location','i-notes'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('i-video-name').textContent='';
+  document.getElementById('i-video').value='';
+  openModal('modal-incident');
+}
+function openAddWaarschuwingModal(){
+  if(!currentVehicleId) return;
+  document.getElementById('w-date').value=nowLocal();
+  ['w-operator','w-notes'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('w-photo-name').textContent='';
+  document.getElementById('w-photo').value='';
+  document.getElementById('w-preview').style.display='none';
+  openModal('modal-waarschuwing');
+}
+function openAddKlemModal(){
+  if(!currentVehicleId) return;
+  const state=enforcementState(currentVehicleId);
+  if(!state.canClamp) return;
+  document.getElementById('klem-modal-info').innerHTML=
+    `🔒 <strong>Handhavingsvoorwaarden vervuld.</strong> Waarschuwing op ${fmt(state.firstWarning.date)}, gevolgd door ${state.incAfterWarning} incident(en) erna.`;
+  document.getElementById('k-date').value=nowLocal();
+  ['k-operator','k-notes','k-released'].forEach(id=>document.getElementById(id).value='');
+  ['k-p1','k-p2'].forEach(id=>{document.getElementById(id).value='';});
+  ['k-p1-name','k-p2-name'].forEach(id=>document.getElementById(id).textContent='');
+  ['k-prev1','k-prev2'].forEach(id=>document.getElementById(id).style.display='none');
+  openModal('modal-klem');
+}
+
+function setFn(inputId,nameId){ const f=document.getElementById(inputId).files[0]; document.getElementById(nameId).textContent=f?f.name:''; }
+function prevImg(inputId,previewId){ const f=document.getElementById(inputId).files[0],el=document.getElementById(previewId); if(f){el.src=URL.createObjectURL(f);el.style.display='block';} }
+function setLoading(btnId,loading){ const b=document.getElementById(btnId); if(b){ b.disabled=loading; b.innerHTML=loading?'<span class="spinner"></span> Bezig...':b.dataset.label||b.innerHTML; }}
+
+// ═══════════════════════════════════════════════════
+//  SAVE ACTIONS
+// ═══════════════════════════════════════════════════
+async function saveVehicle(){
+  const plate=document.getElementById('v-plate').value.trim().toUpperCase();
+  if(!plate) return showNotif('Voer een kenteken in','error');
+  if(vehicleCache.find(v=>v.plate===plate)) return showNotif('Kenteken al geregistreerd','error');
+  const {data,error}=await sb.from('vehicles').insert({plate,brand:document.getElementById('v-brand').value.trim(),notes:document.getElementById('v-notes').value.trim()}).select().single();
+  if(error) return showNotif('Fout: '+error.message,'error');
+  vehicleCache.push(data);
+  closeModal('modal-vehicle'); renderVehicles(); updateStats();
+  showNotif('Voertuig '+plate+' geregistreerd ✓');
+}
+
+async function saveIncident(){
+  const btn=document.getElementById('btn-save-incident');
+  btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Opslaan...';
+
+  let vehicleId=currentVehicleId, plate;
+  if(!vehicleId||fromPage){
+    plate=document.getElementById('i-plate').value.trim().toUpperCase();
+    if(!plate){ btn.disabled=false; btn.textContent='Opslaan'; return showNotif('Voer een kenteken in','error'); }
+    let v=vehicleCache.find(x=>x.plate===plate);
+    if(!v){
+      const {data}=await sb.from('vehicles').insert({plate,brand:'',notes:''}).select().single();
+      if(data){ vehicleCache.push(data); v=data; }
+    }
+    vehicleId=v?.id;
+  } else {
+    plate=vehicleCache.find(v=>v.id===vehicleId)?.plate||'';
+  }
+
+  // Upload video
+  let video_url=null, video_name=null;
+  const vf=document.getElementById('i-video').files[0];
+  if(vf){ video_url=await uploadFile(vf,`video_${plate}`); video_name=vf.name; }
+
+  const {data,error}=await sb.from('events').insert({
+    vehicle_id:vehicleId, type:'incident',
+    subtype:document.getElementById('i-type').value,
+    date:document.getElementById('i-date').value||new Date().toISOString(),
+    location:document.getElementById('i-location').value.trim(),
+    notes:document.getElementById('i-notes').value.trim(),
+    operator:currentUser, video_url, video_name, photo_urls:[]
+  }).select().single();
+
+  btn.disabled=false; btn.textContent='Opslaan';
+  if(error) return showNotif('Fout: '+error.message,'error');
+  eventCache.push(data);
+  closeModal('modal-incident');
+  if(currentVehicleId===vehicleId){ refreshDetailHeader(vehicleId); renderTimeline(vehicleId); }
+  if(fromPage) renderAllIncidents();
+  renderVehicles(); updateStats();
+  showNotif('Incident geregistreerd ✓');
+}
+
+async function saveWaarschuwing(){
+  if(!currentVehicleId) return;
+  const btn=document.getElementById('btn-save-waarschuwing');
+  btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Uploaden...';
+
+  const plate=vehicleCache.find(v=>v.id===currentVehicleId)?.plate||'';
+  let photo_urls=[];
+  const pf=document.getElementById('w-photo').files[0];
+  if(pf){ const url=await uploadFile(pf,`sticker_${plate}`); if(url) photo_urls=[url]; }
+
+  const {data,error}=await sb.from('events').insert({
+    vehicle_id:currentVehicleId, type:'waarschuwing',
+    date:document.getElementById('w-date').value||new Date().toISOString(),
+    operator:document.getElementById('w-operator').value.trim()||currentUser,
+    notes:document.getElementById('w-notes').value.trim(),
+    photo_urls
+  }).select().single();
+
+  btn.disabled=false; btn.innerHTML='🏷️ Opslaan';
+  if(error) return showNotif('Fout: '+error.message,'error');
+  eventCache.push(data);
+  closeModal('modal-waarschuwing');
+  refreshDetailHeader(currentVehicleId); renderTimeline(currentVehicleId);
+  renderAllWaarschuwingen(); renderVehicles(); updateStats();
+  showNotif('Waarschuwing geregistreerd ✓');
+}
+
+async function saveKlem(){
+  if(!currentVehicleId) return;
+  const state=enforcementState(currentVehicleId);
+  if(!state.canClamp) return showNotif('Handhavingsvoorwaarden niet vervuld','error');
+  const btn=document.getElementById('btn-save-klem');
+  btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Uploaden...';
+
+  const plate=vehicleCache.find(v=>v.id===currentVehicleId)?.plate||'';
+  const photo_urls=[];
+  const p1=document.getElementById('k-p1').files[0];
+  const p2=document.getElementById('k-p2').files[0];
+  if(p1){ const u=await uploadFile(p1,`klem1_${plate}`); if(u) photo_urls.push(u); }
+  if(p2){ const u=await uploadFile(p2,`klem2_${plate}`); if(u) photo_urls.push(u); }
+
+  const {data,error}=await sb.from('events').insert({
+    vehicle_id:currentVehicleId, type:'klem',
+    date:document.getElementById('k-date').value||new Date().toISOString(),
+    operator:document.getElementById('k-operator').value.trim()||currentUser,
+    released:document.getElementById('k-released').value||null,
+    notes:document.getElementById('k-notes').value.trim(),
+    photo_urls
+  }).select().single();
+
+  btn.disabled=false; btn.innerHTML='🔒 Opslaan';
+  if(error) return showNotif('Fout: '+error.message,'error');
+  eventCache.push(data);
+  closeModal('modal-klem');
+  refreshDetailHeader(currentVehicleId); renderTimeline(currentVehicleId);
+  renderAllWielklemmen(); renderVehicles(); updateStats();
+  showNotif('Wielklem geregistreerd ✓');
+}
+
+// ═══════════════════════════════════════════════════
+//  MEDIA & NOTIF
+// ═══════════════════════════════════════════════════
+function playVideo(url,name){
+  document.getElementById('video-player').src=url;
+  document.getElementById('video-filename').textContent=name;
+  openModal('modal-video');
+}
+function closeVideoModal(){
+  document.getElementById('video-player').pause();
+  document.getElementById('video-player').src='';
+  closeModal('modal-video');
+}
+
+function showNotif(msg,type=''){
+  const n=document.getElementById('notif');
+  n.textContent=msg; n.className='notif'+(type?' '+type:'');
+  n.classList.add('show');
+  setTimeout(()=>n.classList.remove('show'),3500);
+}
+
+document.querySelectorAll('.modal-overlay').forEach(o=>o.addEventListener('click',e=>{
+  if(e.target===o){ if(o.id==='modal-video')closeVideoModal(); else closeModal(o.id); }
+}));
+
+// ═══════════════════════════════════════════════════
+//  AUTO-INIT
+// ═══════════════════════════════════════════════════
+(async () => {
+  const creds=savedCreds();
+  const name=localStorage.getItem('pw_user')||'';
+  if(creds && name){
+    try {
+      const client=supabase.createClient(creds.url, creds.key);
+      const { error }=await client.from('vehicles').select('id').limit(1);
+      if(!error){ await startApp(client, name); return; }
+    } catch {}
+  }
+  // Show setup screen
+  document.getElementById('setup-screen').style.display='flex';
+})();
+</script>
+</body>
+</html>
