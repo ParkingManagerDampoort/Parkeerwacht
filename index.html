@@ -526,6 +526,30 @@ create policy "open media" on storage.objects for all using (bucket_id='media') 
   </div>
 </div>
 
+<!-- Bewerken -->
+<div class="modal-overlay" id="modal-edit">
+  <div class="modal">
+    <div class="modal-title">Gebeurtenis bewerken<span class="modal-close" onclick="closeModal('modal-edit')">✕</span></div>
+    <input type="hidden" id="edit-id"/>
+    <div class="form-group" id="edit-subtype-group">
+      <label class="form-label">Type overtreding</label>
+      <select class="form-select" id="edit-subtype">
+        <option>Onbetaald parkeren</option><option>Overschrijding parkeertijd</option>
+        <option>Parkeren op privéterrein</option><option>Parkeren in verboden zone</option><option>Andere overtreding</option>
+      </select>
+    </div>
+    <div class="form-group"><label class="form-label">Datum & tijdstip</label><input type="datetime-local" class="form-input" id="edit-date"/></div>
+    <div class="form-group" id="edit-location-group"><label class="form-label">Locatie / Zone</label><input type="text" class="form-input" id="edit-location"/></div>
+    <div class="form-group"><label class="form-label">Operator</label><input type="text" class="form-input" id="edit-operator"/></div>
+    <div class="form-group" id="edit-released-group"><label class="form-label">Vrijgegeven datum (optioneel)</label><input type="datetime-local" class="form-input" id="edit-released"/></div>
+    <div class="form-group"><label class="form-label">Notities</label><textarea class="form-textarea" id="edit-notes"></textarea></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('modal-edit')">Annuleren</button>
+      <button class="btn btn-primary" id="btn-save-edit" onclick="saveEdit()">Opslaan</button>
+    </div>
+  </div>
+</div>
+
 <!-- Video -->
 <div class="modal-overlay" id="modal-video">
   <div class="modal video-modal-inner">
@@ -800,7 +824,7 @@ function mediaHtml(ev) {
 function tlItemHtml(ev) {
   const labels={incident:`⚠️ ${ev.subtype||'Incident'}`,waarschuwing:'🏷️ Waarschuwingssticker',klem:'🔒 Wielklem aangebracht'};
   const m=mediaHtml(ev);
-  return `<div class="tl-item type-${ev.type}">
+  return `<div class="tl-item type-${ev.type}" id="tl-${ev.id}">
     <div class="tl-header">
       <div>
         <span class="tl-type">${labels[ev.type]}</span>
@@ -808,7 +832,11 @@ function tlItemHtml(ev) {
         ${ev.operator?`<div class="tl-meta">👤 ${ev.operator}</div>`:''}
         ${ev.type==='klem'&&ev.released?`<div class="tl-meta" style="color:var(--green)">✅ Vrijgegeven: ${fmt(ev.released)}</div>`:''}
       </div>
-      <div class="tl-date">${fmt(ev.date)}</div>
+      <div style="display:flex;align-items:center;gap:6px;">
+        <div class="tl-date">${fmt(ev.date)}</div>
+        <button class="btn btn-ghost" style="padding:3px 8px;font-size:10px;" onclick="openEditModal('${ev.id}')">✏️</button>
+        <button class="btn btn-ghost" style="padding:3px 8px;font-size:10px;color:var(--red);border-color:rgba(232,57,74,.3)" onclick="deleteEvent('${ev.id}')">🗑️</button>
+      </div>
     </div>
     ${ev.notes?`<div class="tl-body">${ev.notes}</div>`:''}
     ${m?`<div class="media-grid">${m}</div>`:''}
@@ -1044,6 +1072,75 @@ async function saveKlem(){
 // ═══════════════════════════════════════════════════
 //  MEDIA & NOTIF
 // ═══════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════
+//  EDIT & DELETE
+// ═══════════════════════════════════════════════════
+function openEditModal(eventId) {
+  const ev = eventCache.find(e=>e.id===eventId);
+  if (!ev) return;
+  document.getElementById('edit-id').value = eventId;
+  // datum lokaal formatteren
+  const toLocal = iso => { if(!iso) return ''; const d=new Date(iso); d.setMinutes(d.getMinutes()-d.getTimezoneOffset()); return d.toISOString().slice(0,16); };
+  document.getElementById('edit-date').value = toLocal(ev.date);
+  document.getElementById('edit-operator').value = ev.operator||'';
+  document.getElementById('edit-notes').value = ev.notes||'';
+  // subtype alleen voor incidenten
+  const subtypeGrp = document.getElementById('edit-subtype-group');
+  if (ev.type==='incident') {
+    subtypeGrp.style.display='';
+    document.getElementById('edit-subtype').value = ev.subtype||'Onbetaald parkeren';
+  } else { subtypeGrp.style.display='none'; }
+  // locatie voor incidenten
+  const locGrp = document.getElementById('edit-location-group');
+  if (ev.type==='incident') { locGrp.style.display=''; document.getElementById('edit-location').value=ev.location||''; }
+  else { locGrp.style.display='none'; }
+  // vrijgave voor klemmen
+  const relGrp = document.getElementById('edit-released-group');
+  if (ev.type==='klem') { relGrp.style.display=''; document.getElementById('edit-released').value=toLocal(ev.released)||''; }
+  else { relGrp.style.display='none'; }
+  openModal('modal-edit');
+}
+
+async function saveEdit() {
+  const btn = document.getElementById('btn-save-edit');
+  btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Opslaan...';
+  const eventId = document.getElementById('edit-id').value;
+  const ev = eventCache.find(e=>e.id===eventId);
+  if (!ev) { btn.disabled=false; btn.textContent='Opslaan'; return; }
+  const updates = {
+    date: document.getElementById('edit-date').value||ev.date,
+    operator: document.getElementById('edit-operator').value.trim()||ev.operator,
+    notes: document.getElementById('edit-notes').value.trim(),
+  };
+  if (ev.type==='incident') {
+    updates.subtype = document.getElementById('edit-subtype').value;
+    updates.location = document.getElementById('edit-location').value.trim();
+  }
+  if (ev.type==='klem') {
+    updates.released = document.getElementById('edit-released').value||null;
+  }
+  const { data, error } = await sb.from('events').update(updates).eq('id', eventId).select().single();
+  btn.disabled=false; btn.textContent='Opslaan';
+  if (error) return showNotif('Fout: '+error.message,'error');
+  // cache bijwerken
+  const idx = eventCache.findIndex(e=>e.id===eventId);
+  if (idx>=0) eventCache[idx] = {...eventCache[idx], ...data};
+  closeModal('modal-edit');
+  if (currentVehicleId) { refreshDetailHeader(currentVehicleId); renderTimeline(currentVehicleId); }
+  renderVehicles(); updateStats();
+  showNotif('Wijzigingen opgeslagen ✓');
+}
+
+async function deleteEvent(eventId) {
+  if (!confirm('Weet u zeker dat u deze gebeurtenis wilt verwijderen?')) return;
+  const { error } = await sb.from('events').delete().eq('id', eventId);
+  if (error) return showNotif('Fout: '+error.message,'error');
+  eventCache = eventCache.filter(e=>e.id!==eventId);
+  if (currentVehicleId) { refreshDetailHeader(currentVehicleId); renderTimeline(currentVehicleId); }
+  renderVehicles(); updateStats();
+  showNotif('Verwijderd ✓');
+}
+
 function playVideo(url,name){
   document.getElementById('video-player').src=url;
   document.getElementById('video-filename').textContent=name;
